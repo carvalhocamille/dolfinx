@@ -23,10 +23,9 @@ CellDofLayout::CellDofLayout(
 // Helper function for layout on tetrahedron
 int tet_layout_ijk(int i, int j, int k, int n)
 {
-  const int am = (3 * n + 6) * n + 2;
-  const int bm = -3 * (n + 1);
-  const int koff = (k * (am + bm * k + k * k)) / 6;
-  const int qn = i + ((2 * (n - k) + 1 - j) * j) / 2;
+  const int m = n - k;
+  const int koff = (n * (n + 1) * (n + 2) - m * (m + 1) * (m + 2)) / 6;
+  const int qn = i + ((2 * m + 1 - j) * j) / 2;
   return qn + koff;
 }
 //-----------------------------------------------------------------------------
@@ -90,7 +89,7 @@ void CellDofLayout::permutation(std::vector<int>& perm,
             = edge_ordering[fe[0]]
               + 2 * (edge_ordering[fe[1]] + edge_ordering[fe[2]]);
 
-        std::cout << "Ordering = " << facet_ordering << "\n";
+        //    std::cout << "Ordering = " << facet_ordering << "\n";
 
         // Do stuff based on value of facet_ordering (0-5)
         switch (facet_ordering)
@@ -177,8 +176,8 @@ void CellDofLayout::permutation(std::vector<int>& perm,
   }
 
   // Debug printout
-  for (auto& q : perm)
-    std::cout << q << " ";
-  std::cout << "\n";
+  //  for (auto& q : perm)
+  //    std::cout << q << " ";
+  //  std::cout << "\n";
 }
 //-----------------------------------------------------------------------------
