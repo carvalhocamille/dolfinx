@@ -8,10 +8,8 @@
 
 #include <Eigen/Dense>
 #include <dolfin/common/Variable.h>
-#include <dolfin/common/types.h>
-#include <dolfin/log/log.h>
-#include <dolfin/mesh/CellType.h>
 #include <memory>
+#include <petscsys.h>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -145,13 +143,6 @@ public:
       const std::vector<std::vector<std::vector<int>>>& entity_dofs,
       const int64_t* num_global_entities, const int64_t** entity_indices);
 
-  /// Permutation of dofs (handles mapping for higher-order bases). Pass
-  /// in the global vertex indices of a cell (vertex_indices) and return
-  /// the required permutation
-  static void
-  permutation(std::vector<int>& perm, mesh::CellType::Type cell_type,
-              const std::vector<std::vector<std::vector<int>>>& entity_dofs,
-              const int64_t* vertex_indices);
 };
 } // namespace fem
 } // namespace dolfin

@@ -229,3 +229,4 @@ void GenericDofMap::ufc_tabulate_dofs(
     offset += entity_dofs[d][0].size() * num_global_entities[d];
   }
 }
+//-----------------------------------------------------------------------------
