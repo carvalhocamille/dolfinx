@@ -23,12 +23,13 @@ CellDofLayout::CellDofLayout(
 // Helper function for layout on tetrahedron
 int tet_layout_ijk(int i, int j, int k, int n)
 {
-  const int am = n * (3 * n + 6) + 2;
+  const int am = (3 * n + 6) * n + 2;
   const int bm = -3 * (n + 1);
   const int koff = (k * (am + bm * k + k * k)) / 6;
-  const qn = ((2 * (n - k) + 1 - j) * j) / 2 + i;
+  const int qn = i + ((2 * (n - k) + 1 - j) * j) / 2;
   return qn + koff;
 }
+//-----------------------------------------------------------------------------
 // Helper function to get layout of dofs on a triangular facet
 int tri_layout_ij(int i, int j, int n) { return i + ((2 * n + 1 - j) * j) / 2; }
 //-----------------------------------------------------------------------------
