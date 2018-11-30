@@ -6,8 +6,9 @@
 
 #include <iostream>
 
-#include "CellDofLayout.h"
 #include <dolfin/log/log.h>
+
+#include "CellDofLayout.h"
 
 using namespace dolfin;
 using namespace dolfin::fem;
@@ -72,18 +73,19 @@ void CellDofLayout::permutation(std::vector<int>& perm,
       }
     }
 
-    // Edges on each facet
-    static unsigned int facet_edges[4][3]
-        = {{0, 1, 2}, {0, 3, 4}, {1, 3, 5}, {2, 4, 5}};
-
-    // Facet ordering
-    for (unsigned int m = 0; m < 4; ++m)
+    // Only permute dofs if more than one on a facet
+    if (nfacet_dofs > 1)
     {
-      const std::vector<int>& facet_dofs = _entity_dofs[2][m];
-      unsigned int c = 0;
+      // Edges on each facet
+      static unsigned int facet_edges[4][3]
+          = {{0, 1, 2}, {0, 3, 4}, {1, 3, 5}, {2, 4, 5}};
 
-      if (facet_dofs.size() > 1)
+      // Facet ordering
+      for (unsigned int m = 0; m < 4; ++m)
       {
+        const std::vector<int>& facet_dofs = _entity_dofs[2][m];
+        unsigned int c = 0;
+
         const unsigned int* fe = facet_edges[m];
         int facet_ordering
             = edge_ordering[fe[0]]
@@ -174,10 +176,30 @@ void CellDofLayout::permutation(std::vector<int>& perm,
       }
     }
   }
+  else if (_cell_type == mesh::CellType::Type::quadrilateral)
+  {
+    // Get ordering of edges
+    bool edge_ordering[4];
+    edge_ordering[0] = vertex_indices[0] > vertex_indices[1];
+    edge_ordering[1] = vertex_indices[2] > vertex_indices[3];
+    edge_ordering[2] = vertex_indices[0] > vertex_indices[2];
+    edge_ordering[3] = vertex_indices[1] > vertex_indices[3];
+
+    for (unsigned int j = 0; j < 4; ++j)
+    {
+      if (edge_ordering[j])
+      {
+        // Reverse dofs along this edge
+        const std::vector<int>& edge_dofs = _entity_dofs[1][j];
+        const unsigned int ne = edge_dofs.size();
+        for (unsigned int i = 0; i < ne; ++i)
+          perm[edge_dofs[i]] = edge_dofs[ne - i - 1];
+      }
+    }
+  }
 
   // Debug printout
   //  for (auto& q : perm)
   //    std::cout << q << " ";
   //  std::cout << "\n";
 }
-//-----------------------------------------------------------------------------
