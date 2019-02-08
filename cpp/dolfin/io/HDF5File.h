@@ -8,7 +8,6 @@
 
 #include "HDF5Interface.h"
 #include <dolfin/common/MPI.h>
-#include <dolfin/common/Variable.h>
 #include <dolfin/function/Function.h>
 #include <dolfin/la/PETScVector.h>
 #include <dolfin/mesh/Mesh.h>
@@ -47,7 +46,7 @@ namespace io
 
 /// Interface to HDF5 files
 
-class HDF5File : public common::Variable
+class HDF5File
 {
 
 public:
@@ -204,6 +203,9 @@ public:
   /// Get the file ID
   hid_t h5_id() const { return _hdf5_file_id; }
 
+  // FIXME: document
+  bool chunking = false;
+
 private:
   // Friend
   friend class XDMFFile;
@@ -267,9 +269,7 @@ void HDF5File::write_data(const std::string dataset_name,
       = MPI::global_offset(_mpi_comm.comm(), num_local_items, true);
   std::array<std::int64_t, 2> range = {{offset, offset + num_local_items}};
 
-  // Write data to HDF5 file
-  const bool chunking = parameters["chunking"];
-  // Ensure dataset starts with '/'
+  // Write data to HDF5 file. Ensure dataset starts with '/'.
   std::string dset_name(dataset_name);
   if (dset_name[0] != '/')
     dset_name = "/" + dataset_name;

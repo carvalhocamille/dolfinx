@@ -21,6 +21,7 @@
 #include <dolfin/function/Function.h>
 #include <dolfin/function/FunctionSpace.h>
 #include <dolfin/la/PETScVector.h>
+#include <dolfin/la/utils.h>
 #include <dolfin/mesh/Cell.h>
 #include <dolfin/mesh/DistributedMeshTools.h>
 #include <dolfin/mesh/Edge.h>
@@ -30,9 +31,9 @@
 #include <dolfin/mesh/MeshPartitioning.h>
 #include <dolfin/mesh/MeshValueCollection.h>
 #include <dolfin/mesh/Vertex.h>
-#include <dolfin/parameter/GlobalParameters.h>
 #include <iomanip>
 #include <memory>
+#include <petscvec.h>
 #include <set>
 #include <string>
 #include <vector>
@@ -45,18 +46,7 @@ XDMFFile::XDMFFile(MPI_Comm comm, const std::string filename, Encoding encoding)
     : _mpi_comm(comm), _filename(filename), _counter(0),
       _xml_doc(new pugi::xml_document), _encoding(encoding)
 {
-  // Rewrite the mesh at every time step in a time series. Should be
-  // turned off if the mesh remains constant.
-  parameters.add("rewrite_function_mesh", true);
-
-  // function::Functions share the same mesh for the same time step. The files
-  // produced are smaller and work better in Paraview
-  parameters.add("functions_share_mesh", false);
-
-  // FIXME: This is only relevant to HDF5
-  // Flush datasets to disk at each timestep. Allows inspection of the
-  // HDF5 file whilst running, at some performance cost.
-  parameters.add("flush_output", false);
+  // Do nothing
 }
 //-----------------------------------------------------------------------------
 XDMFFile::~XDMFFile() { close(); }
@@ -279,7 +269,7 @@ void XDMFFile::write_checkpoint(const function::Function& u,
   }
 
   // Close the HDF5 file if in "flush" mode
-  if (_encoding == Encoding::HDF5 and parameters["flush_output"])
+  if (_encoding == Encoding::HDF5 and flush_output)
   {
     log::log(PROGRESS, "Writing function in \"flush_output\" mode. HDF5 "
                        "file will be flushed (closed).");
@@ -440,7 +430,7 @@ void XDMFFile::write(const function::Function& u, double time_step)
     if (_counter == 0)
       _hdf5_file = std::make_unique<HDF5File>(
           mesh.mpi_comm(), get_hdf5_filename(_filename), "w");
-    else if (parameters["flush_output"])
+    else if (flush_output)
     {
       // Append to existing HDF5 file
       assert(!_hdf5_file);
@@ -464,7 +454,7 @@ void XDMFFile::write(const function::Function& u, double time_step)
 
   // Should functions share mesh or not? By default they do not
   std::string tg_name = "TimeSeries_" + u.name();
-  if (parameters["functions_share_mesh"])
+  if (functions_share_mesh)
     tg_name = "TimeSeries";
 
   // Look for existing time series grid node with Name == tg_name
@@ -497,11 +487,11 @@ void XDMFFile::write(const function::Function& u, double time_step)
   }
 
   // Only add mesh grid node at this time step if no other function has
-  // previously added it (and parameters["functions_share_mesh"] == true)
+  // previously added it (and functions_share_mesh == true)
   if (!mesh_node)
   {
     // Add the mesh grid node to to the time series grid node
-    if (new_timegrid or parameters["rewrite_function_mesh"])
+    if (new_timegrid or rewrite_function_mesh)
     {
       add_mesh(_mpi_comm.comm(), timegrid_node, h5_id, mesh,
                "/Mesh/" + std::to_string(_counter));
@@ -601,7 +591,7 @@ void XDMFFile::write(const function::Function& u, double time_step)
     _xml_doc->save_file(_filename.c_str(), "  ");
 
   // Close the HDF5 file if in "flush" mode
-  if (_encoding == Encoding::HDF5 and parameters["flush_output"])
+  if (_encoding == Encoding::HDF5 and flush_output)
   {
     assert(_hdf5_file);
     _hdf5_file.reset();
@@ -1360,10 +1350,18 @@ void XDMFFile::add_function(MPI_Comm mpi_comm, pugi::xml_node& xml_node,
   add_data_item(mpi_comm, fe_attribute_node, h5_id, h5_path + "/cell_dofs",
                 cell_dofs, {num_cell_dofs_global, 1}, "UInt");
 
+  // FIXME: Avoid unnecessary copying of data
   // Get all local data
-  const la::PETScVector& u_vector = *u.vector();
-  std::vector<PetscScalar> local_data;
-  u_vector.get_local(local_data);
+  const la::PETScVector& u_vector = u.vector();
+  PetscErrorCode ierr;
+  const PetscScalar* u_ptr = nullptr;
+  ierr = VecGetArrayRead(u_vector.vec(), &u_ptr);
+  if (ierr != 0)
+    la::petsc_error(ierr, __FILE__, "VecGetArrayRead");
+  std::vector<PetscScalar> local_data(u_ptr, u_ptr + u_vector.local_size());
+  ierr = VecRestoreArrayRead(u_vector.vec(), &u_ptr);
+  if (ierr != 0)
+    la::petsc_error(ierr, __FILE__, "VecRestoreArrayRead");
 
 #ifdef PETSC_USE_COMPLEX
   // FIXME: Avoid copies by writing directly a compound data
@@ -1682,8 +1680,7 @@ XDMFFile::read_checkpoint(std::shared_ptr<const function::FunctionSpace> V,
 #endif
 
   function::Function u(V);
-  assert(u.vector());
-  HDF5Utility::set_local_vector_values(_mpi_comm.comm(), *u.vector(), mesh,
+  HDF5Utility::set_local_vector_values(_mpi_comm.comm(), u.vector(), mesh,
                                        cells, cell_dofs, x_cell_dofs, vector,
                                        input_vector_range, dofmap);
 
@@ -2028,11 +2025,15 @@ XDMFFile::get_cell_type(const pugi::xml_node& topology_node)
   pugi::xml_attribute type_attr = topology_node.attribute("TopologyType");
   assert(type_attr);
 
-  const std::map<std::string, std::pair<std::string, int>> xdmf_to_dolfin = {
-      {"polyvertex", {"point", 1}},    {"polyline", {"interval", 1}},
-      {"edge_3", {"interval", 2}},     {"triangle", {"triangle", 1}},
-      {"triangle_6", {"triangle", 2}}, {"tetrahedron", {"tetrahedron", 1}},
-      {"tetrahedron_10", {"tetrahedron", 2}},  {"quadrilateral", {"quadrilateral", 1}}};
+  const std::map<std::string, std::pair<std::string, int>> xdmf_to_dolfin
+      = {{"polyvertex", {"point", 1}},
+         {"polyline", {"interval", 1}},
+         {"edge_3", {"interval", 2}},
+         {"triangle", {"triangle", 1}},
+         {"triangle_6", {"triangle", 2}},
+         {"tetrahedron", {"tetrahedron", 1}},
+         {"tetrahedron_10", {"tetrahedron", 2}},
+         {"quadrilateral", {"quadrilateral", 1}}};
 
   // Convert XDMF cell type string to DOLFIN cell type string
   std::string cell_type = type_attr.as_string();
@@ -2702,7 +2703,6 @@ std::vector<PetscScalar>
 XDMFFile::get_cell_data_values(const function::Function& u)
 {
   assert(u.function_space()->dofmap());
-  assert(u.vector());
 
   const auto mesh = u.function_space()->mesh();
   const std::size_t value_size = u.value_size();
@@ -2729,8 +2729,13 @@ XDMFFile::get_cell_data_values(const function::Function& u)
 
   // Get  values
   std::vector<PetscScalar> data_values(dof_set.size());
-  assert(u.vector());
-  u.vector()->get_local(data_values.data(), dof_set.size(), dof_set.data());
+  {
+    la::VecReadWrapper u_wrapper(u.vector().vec());
+    Eigen::Map<const Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> x
+        = u_wrapper.x;
+    for (std::size_t i = 0; i < dof_set.size(); ++i)
+      data_values[i] = x[dof_set[i]];
+  }
 
   if (value_rank == 1 && value_size == 2)
   {
@@ -2869,8 +2874,13 @@ XDMFFile::get_p2_data_values(const function::Function& u)
     }
 
     // Get the values at the vertex points
-    const la::PETScVector& uvec = *u.vector();
-    uvec.get_local(data_values.data(), data_dofs.size(), data_dofs.data());
+    {
+      la::VecReadWrapper u_wrapper(u.vector().vec());
+      Eigen::Map<const Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> x
+          = u_wrapper.x;
+      for (std::size_t i = 0; i < data_dofs.size(); ++i)
+        data_values[i] = x[data_dofs[i]];
+    }
 
     // Get midpoint values for  mesh::Edge points
     for (auto& e : mesh::MeshRange<mesh::Edge>(*mesh))
@@ -2908,14 +2918,17 @@ XDMFFile::get_p2_data_values(const function::Function& u)
       }
     }
 
-    const la::PETScVector& uvec = *u.vector();
-    uvec.get_local(data_values.data(), data_dofs.size(), data_dofs.data());
+    la::VecReadWrapper u_wrapper(u.vector().vec());
+    Eigen::Map<const Eigen::Matrix<PetscScalar, Eigen::Dynamic, 1>> x
+        = u_wrapper.x;
+    for (std::size_t i = 0; i < data_dofs.size(); ++i)
+      data_values[i] = x[data_dofs[i]];
   }
   else
   {
-    log::dolfin_error("XDMFFile.cpp", "get point values for function::Function",
-                      "Function appears not to be defined on a P1 or P2 type "
-                      "function::FunctionSpace");
+    throw std::runtime_error(
+        "Cannotget point values for function::Function. Function appears not "
+        "to be defined on a P1 or P2 type function::FunctionSpace");
   }
 
   // Blank out empty values of 2D vector and tensor

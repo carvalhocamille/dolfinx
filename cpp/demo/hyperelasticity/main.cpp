@@ -1,4 +1,5 @@
 #include "HyperElasticity.h"
+#include <cfloat>
 #include <dolfin.h>
 
 using namespace dolfin;
@@ -11,7 +12,7 @@ class Left : public mesh::SubDomain
   {
     EigenArrayXb flags(x.rows());
     for (int i = 0; i < x.rows(); ++i)
-      flags[i] = (std::abs(x(i, 0)) < DOLFIN_EPS) and on_boundary;
+      flags[i] = (std::abs(x(i, 0)) < DBL_EPSILON) and on_boundary;
 
     return flags;
   }
@@ -25,7 +26,7 @@ class Right : public mesh::SubDomain
   {
     EigenArrayXb flags(x.rows());
     for (int i = 0; i < x.rows(); ++i)
-      flags[i] = (std::abs(x(i, 0) - 1.0) < DOLFIN_EPS) and on_boundary;
+      flags[i] = (std::abs(x(i, 0) - 1.0) < DBL_EPSILON) and on_boundary;
 
     return flags;
   }
@@ -98,7 +99,9 @@ public:
                       std::shared_ptr<fem::Form> L,
                       std::shared_ptr<fem::Form> J,
                       std::vector<std::shared_ptr<const fem::DirichletBC>> bcs)
-      : _u(u), _l(L), _j(J), _bcs(bcs)
+      : _u(u), _l(L), _j(J), _bcs(bcs),
+        _b(*L->function_space(0)->dofmap()->index_map()),
+        _matA(fem::create_matrix(*J))
   {
     // Do nothing
   }
@@ -106,50 +109,45 @@ public:
   /// Destructor
   virtual ~HyperElasticProblem() = default;
 
-  /// Compute F at current point x
-  virtual la::PETScVector* F(const la::PETScVector& x)
+  void form(Vec x) final
   {
-    if (!b)
-    {
-      std::cout << "First computation of b." << std::endl;
-      b = std::make_unique<la::PETScVector>(
-          assemble({_l.get()}, {{_j}}, _bcs, &x, fem::BlockType::monolithic, -1.0));
-      std::cout << "Post first computation of b." << std::endl;
-    }
-    else
-    {
-      std::cout << "Second+ computation of b." << std::endl;
-      assemble(*b, {_l.get()}, {{}}, _bcs, &x, -1.0);
-      std::cout << "Post second computation of b." << std::endl;
-    }
-    return b.get();
+    la::PETScVector _x(x);
+    _x.update_ghosts();
+  }
+
+  /// Compute F at current point x
+  Vec F(const Vec x) final
+  {
+    // Assemble b
+    la::VecWrapper b_wrapper(_b.vec());
+    b_wrapper.x.setZero();
+    b_wrapper.restore();
+
+    assemble_vector(_b.vec(), *_l);
+    _b.apply_ghosts();
+
+    // Set bcs
+    set_bc(_b.vec(), _bcs, x, -1);
+
+    return _b.vec();
   }
 
   /// Compute J = F' at current point x
-  virtual la::PETScMatrix* J(const la::PETScVector& x)
+  Mat J(const Vec x) final
   {
-    if (!A)
-    {
-      A = std::make_unique<la::PETScMatrix>(
-          assemble({{_j.get()}}, _bcs, fem::BlockType::monolithic));
-    }
-    else
-      assemble(*A, {{_j.get()}}, _bcs);
-
-    return A.get();
+    MatZeroEntries(_matA.mat());
+    assemble_matrix(_matA.mat(), *_j, _bcs);
+    _matA.apply(la::PETScMatrix::AssemblyType::FINAL);
+    return _matA.mat();
   }
 
 private:
   std::shared_ptr<function::Function> _u;
-  std::shared_ptr<fem::Form> _j;
-  std::shared_ptr<fem::Form> _l;
+  std::shared_ptr<fem::Form> _l, _j;
   std::vector<std::shared_ptr<const fem::DirichletBC>> _bcs;
 
-  std::unique_ptr<la::PETScVector> b;
-  std::unique_ptr<la::PETScMatrix> A;
-
-  // A, b
-  // _u, _l, _j, _bcs
+  la::PETScVector _b;
+  la::PETScMatrix _matA;
 };
 
 int main(int argc, char* argv[])
@@ -158,7 +156,7 @@ int main(int argc, char* argv[])
 
   // Inside the ``main`` function, we begin by defining a tetrahedral mesh
   // of the domain and the function space on this mesh. Here, we choose to
-  // create a unit cube mesh with 25 ( = 24 + 1) verices in one direction
+  // create a unit cube mesh with 25 ( = 24 + 1) vertices in one direction
   // and 17 ( = 16 + 1) vertices in the other two directions. With this
   // mesh, we initialize the (finite element) function space defined by the
   // generated code.
@@ -182,8 +180,8 @@ int main(int argc, char* argv[])
           std::shared_ptr<ufc_dofmap>(space->dofmap()), *mesh));
 
   // Define Dirichlet boundaries
-  auto left = std::make_shared<Left>();
-  auto right = std::make_shared<Right>();
+  Left left;
+  Right right;
 
   // Define solution function
   auto u = std::make_shared<function::Function>(V);
@@ -225,7 +223,7 @@ int main(int argc, char* argv[])
 
   HyperElasticProblem problem(u, L, a, bcs);
   nls::NewtonSolver newton_solver(MPI_COMM_WORLD);
-  newton_solver.solve(problem, *u->vector());
+  newton_solver.solve(problem, u->vector().vec());
 
   // Save solution in VTK format
   io::VTKFile file("u.pvd");

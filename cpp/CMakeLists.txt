@@ -1,6 +1,5 @@
 # Top level CMakeLists.txt file for DOLFIN
-
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.10)
 
 #------------------------------------------------------------------------------
 # Set project name and version number
@@ -13,6 +12,17 @@ set(DOLFIN_VERSION_MICRO "0")
 set(DOLFIN_VERSION "${DOLFIN_VERSION_MAJOR}.${DOLFIN_VERSION_MINOR}.${DOLFIN_VERSION_MICRO}")
 if (NOT DOLFIN_VERSION_RELEASE)
   set(DOLFIN_VERSION "${DOLFIN_VERSION}.dev0")
+endif()
+
+#------------------------------------------------------------------------------
+# Set CMake options, see `cmake --help-policy CMP000x`
+
+cmake_policy(VERSION 3.10)
+if (POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+if (POLICY CMP0075)
+  cmake_policy(SET CMP0075 NEW)
 endif()
 
 #------------------------------------------------------------------------------
@@ -44,13 +54,6 @@ endif()
 
 #------------------------------------------------------------------------------
 # General configuration
-
-# Set CMake options, see `cmake --help-policy CMP000x`
-if (COMMAND cmake_policy)
-  cmake_policy(SET CMP0003 NEW)
-  cmake_policy(SET CMP0004 NEW)
-  cmake_policy(SET CMP0042 NEW)
-endif()
 
 # Set location of our FindFoo.cmake modules
 set(DOLFIN_CMAKE_DIR "${DOLFIN_SOURCE_DIR}/cmake" CACHE INTERNAL "")
@@ -193,7 +196,7 @@ set_package_properties(Eigen3 PROPERTIES TYPE REQUIRED
   DESCRIPTION "Lightweight C++ template library for linear algebra"
   URL "http://eigen.tuxfamily.org")
 
-find_package(PETSc 3.7)
+find_package(PETSc 3.9)
 set_package_properties(PETSc PROPERTIES TYPE REQUIRED
   DESCRIPTION "Portable, Extensible Toolkit for Scientific Computation (PETSc)"
   URL "https://www.mcs.anl.gov/petsc/"
@@ -221,7 +224,7 @@ set_package_properties(HDF5 PROPERTIES TYPE REQUIRED
 # Check for SLEPc
 set(SLEPC_FOUND FALSE)
 if (DOLFIN_ENABLE_SLEPC)
-  find_package(SLEPc 3.7)
+  find_package(SLEPc 3.9)
   set_package_properties(SLEPc PROPERTIES TYPE OPTIONAL
     DESCRIPTION "Scalable Library for Eigenvalue Problem Computations"
     URL "http://slepc.upv.es/")
@@ -299,36 +302,17 @@ install(FILES ${CMAKE_BINARY_DIR}/dolfin.conf
         COMPONENT Development)
 
 #------------------------------------------------------------------------------
-# Generate demo files from rst
-
-find_package(PythonInterp 3)
-
-if (PYTHONINTERP_FOUND)
-  message(STATUS "")
-  message(STATUS "Generating demo source files from reStructuredText")
-  message(STATUS "--------------------------------------------------")
-  file(GLOB_RECURSE demo_rst_files "demo/*.py.rst" "demo/*.cpp.rst" "demo/*.ufl.rst")
-  foreach(rst_file ${demo_rst_files})
-    execute_process(COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" ../utils/pylit/pylit.py ${rst_file}
-      WORKING_DIRECTORY ${DOLFIN_SOURCE_DIR})
-    #add_custom_command(TARGET demos_source PRE_BUILD
-    #  COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" ../utils/pylit/pylit.py ${rst_file}
-    #  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-  endforeach()
-endif()
-
-#------------------------------------------------------------------------------
 # Generate form files for tests and demos and DOLFIN if not exists
 # FIXME: Generate files in Build directory instead, at least for demo
 # and tests
 
 set(COPY_DEMO_TEST_DEMO_DATA FALSE)
-if (PYTHONINTERP_FOUND AND NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/Poisson.h)
+if (PYTHONINTERP_FOUND AND NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/poisson/Poisson.h)
   message(STATUS "")
   message(STATUS "Generating form files in demo and test and directories. May take some time...")
   message(STATUS "----------------------------------------------------------------------------------------")
   execute_process(
-    COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" ${DOLFIN_SOURCE_DIR}/cmake/scripts/generate-form-files.py
+    COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" ${DOLFIN_SOURCE_DIR}/cmake/scripts/generate-form-files.py ${PETSC_SCALAR_COMPLEX}
     WORKING_DIRECTORY ${DOLFIN_SOURCE_DIR}
     RESULT_VARIABLE FORM_GENERATION_RESULT
     OUTPUT_VARIABLE FORM_GENERATION_OUTPUT
@@ -337,8 +321,8 @@ if (PYTHONINTERP_FOUND AND NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poiss
 
   if (FORM_GENERATION_RESULT)
     # Cleanup so download is triggered next time we run cmake
-    if (EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/Poisson.h)
-      file(REMOVE ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/Poisson.h)
+    if (EXISTS ${DOLFIN_SOURCE_DIR}/demo/poisson/Poisson.h)
+      file(REMOVE ${DOLFIN_SOURCE_DIR}/demo/poisson/Poisson.h)
     endif()
     message(FATAL_ERROR "Generation of form files failed: \n${FORM_GENERATION_OUTPUT}")
   endif()
@@ -351,7 +335,7 @@ endif()
 # FIXME: Generate files in Build directory instead?
 # NOTE: We need to call this script after generate-formfiles
 
-if (PYTHONINTERP_FOUND AND NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/CMakeLists.txt)
+if (PYTHONINTERP_FOUND AND NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/poisson/CMakeLists.txt)
   message(STATUS "")
   message(STATUS "Generating CMakeLists.txt files in demo and test directories")
   message(STATUS "-------------------------------------------------------------------")
@@ -365,8 +349,8 @@ if (PYTHONINTERP_FOUND AND NOT EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poiss
   if (CMAKE_GENERATION_RESULT)
 
     # Cleanup so FFC rebuild is triggered next time we run cmake
-    if (EXISTS ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/CMakeLists.txt)
-      file(REMOVE ${DOLFIN_SOURCE_DIR}/demo/documented/poisson/CMakeLists.txt)
+    if (EXISTS ${DOLFIN_SOURCE_DIR}/demo/poisson/CMakeLists.txt)
+      file(REMOVE ${DOLFIN_SOURCE_DIR}/demo/poisson/CMakeLists.txt)
     endif()
     message(FATAL_ERROR "Generation of CMakeLists.txt files failed: \n${CMAKE_GENERATION_OUTPUT}")
   endif()
@@ -405,19 +389,6 @@ else()
   set(MAKE_PROGRAM "${CMAKE_MAKE_PROGRAM}")
 endif()
 
-# Add taget to build .py demo files from Python rst input files, and
-# create a target to build source files from .cpp.rst and .py.rst
-# files (using pylit)
-if (PYTHONINTERP_FOUND)
-  file(GLOB_RECURSE demo_rst_files "demo/*.py.rst" "demo/*.cpp.rst" "demo/*.ufl.rst")
-  add_custom_target(demos_source)
-  foreach(rst_file ${rst_files})
-    add_custom_command(TARGET demos_source PRE_BUILD
-      COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" ../utils/pylit/pylit.py ${rst_file}
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-  endforeach()
-endif()
-
 # Install the demo source files
 install(DIRECTORY demo DESTINATION ${DOLFIN_SHARE_DIR}
   FILES_MATCHING
@@ -437,24 +408,9 @@ enable_testing()
 # Add target "unittests", but do not add to default target
 add_subdirectory(test/unit EXCLUDE_FROM_ALL)
 
-# Add demo but do not add to default target
+# Add demos but do not add to default target
 set(CMAKE_MODULE_PATH "${DOLFIN_CMAKE_DIR}/modules")
 add_subdirectory(demo EXCLUDE_FROM_ALL)
-
-# Add target "copy_data_test_demo"
-if (PYTHONINTERP_FOUND)
-  add_custom_target(copy_data_test_demo
-    COMMAND ${PYTHON_EXECUTABLE} "-B" "-u" ${DOLFIN_SOURCE_DIR}/cmake/scripts/copy-test-demo-data.py ${CMAKE_CURRENT_BINARY_DIR}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-endif()
-
-# Add target "demos" for building the demos
-if (PYTHONINTERP_FOUND)
-  add_custom_target(demos
-    COMMAND ${MAKE_PROGRAM}
-    DEPENDS copy_data_test_demo demos_source
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/demo")
-endif()
 
 #------------------------------------------------------------------------------
 # Add "make uninstall" target

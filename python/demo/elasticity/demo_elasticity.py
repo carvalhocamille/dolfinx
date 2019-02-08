@@ -1,29 +1,31 @@
-"""This demo solves the equations of static linear elasticity for a
-pulley subjected to centripetal accelerations. The solver uses
-smoothed aggregation algerbaric multigrid."""
-
 # Copyright (C) 2014 Garth N. Wells
 #
 # This file is part of DOLFIN (https://www.fenicsproject.org)
 #
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
+# This demo solves the equations of static linear elasticity for a
+# pulley subjected to centripetal accelerations. The solver uses
+# smoothed aggregation algerbaric multigrid.
+
 import numpy as np
+from petsc4py import PETSc
+
 import dolfin
-from dolfin import *
-from dolfin.io import XDMFFile
-from dolfin.la import (VectorSpaceBasis, PETScVector, PETScOptions,
-                       PETScKrylovSolver)
+from dolfin import (MPI, BoxMesh, CellType, DirichletBC, Function, Point,
+                    TestFunction, TrialFunction, VectorFunctionSpace, cpp)
 from dolfin.fem.assembling import assemble_system
+from dolfin.io import XDMFFile
+from dolfin.la import PETScKrylovSolver, PETScOptions, VectorSpaceBasis
+from ufl import Identity, as_vector, dx, grad, inner, sym, tr
 
-import matplotlib.pyplot as plt
 
-
-def build_nullspace(V, x):
+def build_nullspace(V):
     """Function to build null space for 3D elasticity"""
 
     # Create list of vectors for null space
-    nullspace_basis = [PETScVector(x) for i in range(6)]
+    index_map = V.dofmap().index_map()
+    nullspace_basis = [cpp.la.create_vector(index_map) for i in range(6)]
 
     # Build translational null space basis
     V.sub(0).dofmap().set(nullspace_basis[0], 1.0)
@@ -38,14 +40,14 @@ def build_nullspace(V, x):
     V.sub(2).set_x(nullspace_basis[5], 1.0, 1)
     V.sub(1).set_x(nullspace_basis[5], -1.0, 2)
 
-    for x in nullspace_basis:
-        x.apply()
-
     # Create vector space basis and orthogonalize
     basis = VectorSpaceBasis(nullspace_basis)
     basis.orthonormalize()
 
-    return basis
+    _x = [basis[i] for i in range(6)]
+    nsp = PETSc.NullSpace()
+    nsp.create(_x)
+    return nsp
 
 
 # Load mesh from file
@@ -67,7 +69,8 @@ mesh.geometry.coord_mapping = cmap
 
 
 def boundary(x, on_boundary):
-    return np.logical_or(x[:, 0] < DOLFIN_EPS, x[:, 0] > 1.0 - DOLFIN_EPS)
+    return np.logical_or(x[:, 0] < np.finfo(float).eps,
+                         x[:, 0] > 1.0 - np.finfo(float).eps)
 
 
 # Rotation rate and mass density
@@ -106,20 +109,18 @@ u0 = Function(V)
 # Set up boundary condition on inner surface
 bc = DirichletBC(V, u0, boundary)
 
-# Assemble system, applying boundary conditions and preserving
-# symmetry)
+# Assemble system, applying boundary conditions and preserving symmetry)
 A, b = assemble_system(a, L, bc)
+assert A.block_size == 3
 
 # Create solution function
 u = Function(V)
 
-# Create near null space basis (required for smoothed aggregation
-# AMG). The solution vector is passed so that it can be copied to
-# generate compatible vectors for the nullspace.
-null_space = build_nullspace(V, u.vector())
+# Create near null space basis (required for smoothed aggregation AMG).
+null_space = build_nullspace(V)
 
 # Attach near nullspace to matrix
-A.set_near_nullspace(null_space)
+A.setNearNullSpace(null_space)
 
 # Set solver options
 PETScOptions.set("ksp_view")
@@ -140,7 +141,6 @@ PETScOptions.set("ksp_monitor")
 
 # Create CG Krylov solver and turn convergence monitoring on
 solver = PETScKrylovSolver(MPI.comm_world)
-# solver = PETScKrylovSolver()
 solver.set_from_options()
 
 # Set matrix operator
@@ -153,7 +153,7 @@ solver.solve(u.vector(), b)
 file = XDMFFile(MPI.comm_world, "elasticity.xdmf")
 file.write(u)
 
-unorm = u.vector().norm(dolfin.cpp.la.Norm.l2)
+unorm = u.vector().norm()
 if MPI.rank(mesh.mpi_comm()) == 0:
     print("Solution vector norm:", unorm)
 

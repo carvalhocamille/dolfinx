@@ -1,7 +1,7 @@
-''' Test Helmholtz problem for which the exact solution is a plane wave
-propagating at angle theta to the postive x-axis.
-Chosen for comparison with results from Ihlenburg's book
-"Finite Element Analysis of Acoustic Scattering" p138-139 '''
+# Test Helmholtz problem for which the exact solution is a plane wave
+# propagating at angle theta to the postive x-axis. Chosen for
+# comparison with results from Ihlenburg\'s book \"Finite Element
+# Analysis of Acoustic Scattering\" p138-139
 
 # Copyright (C) 2018 Samuel Groth
 #
@@ -9,22 +9,26 @@ Chosen for comparison with results from Ihlenburg's book
 #
 # SPDX-License-Identifier:    LGPL-3.0-or-later
 
-from dolfin import UnitSquareMesh, MPI, FacetNormal, Expression, \
-    FunctionSpace, TrialFunction, TestFunction, dot, inner, dx, ds, \
-    grad, Function, solve, interpolate, has_petsc_complex, project
-from dolfin import function
+import numpy as np
+
+from dolfin import (MPI, Expression, FacetNormal, Function, FunctionSpace,
+                    TestFunction, TrialFunction, UnitSquareMesh, dot, ds, dx,
+                    function, grad, has_petsc_complex, inner, interpolate,
+                    project, solve)
 from dolfin.fem.assemble import assemble
 from dolfin.io import XDMFFile
-import numpy as np
 
 if not has_petsc_complex:
     print('This demo only works with PETSc-complex')
     exit()
 
+
 # Wavenumber
 k0 = 20
+
 # approximation space polynomial degree
 deg = 1
+
 # number of elements in each direction of mesh
 n_elem = 128
 
@@ -34,9 +38,11 @@ n = FacetNormal(mesh)
 # Incident plane wave
 theta = np.pi / 8
 
+
 @function.expression.numba_eval
 def ui_eval(values, x, cell_idx):
     values[:, 0] = np.exp(1.0j * k0 * (np.cos(theta) * x[:, 0] + np.sin(theta) * x[:, 1]))
+
 
 # Test and trial function space
 V = FunctionSpace(mesh, ("Lagrange", deg))
@@ -48,8 +54,7 @@ ui = interpolate(Expression(ui_eval), V)
 u = TrialFunction(V)
 v = TestFunction(V)
 g = dot(grad(ui), n) + 1j * k0 * ui
-a = inner(grad(u), grad(v)) * dx - k0**2 * inner(u, v) * dx + \
-    1j * k0 * inner(u, v) * ds
+a = inner(grad(u), grad(v)) * dx - k0**2 * inner(u, v) * dx + 1j * k0 * inner(u, v) * ds
 L = inner(g, v) * ds
 
 # Compute solution
@@ -61,13 +66,15 @@ with XDMFFile(MPI.comm_world, "plane_wave.xdmf",
               encoding=XDMFFile.Encoding.HDF5) as file:
     file.write(u)
 
-''' Calculate L2 and H1 errors of FEM solution and best approximation.
-This demonstrates the error bounds given in Ihlenburg.
-Pollution errors are evident for high wavenumbers.'''
+"""Calculate L2 and H1 errors of FEM solution and best approximation.
+This demonstrates the error bounds given in Ihlenburg. Pollution errors
+are evident for high wavenumbers."""
 # Function space for exact solution - need it to be higher than deg
 V_exact = FunctionSpace(mesh, ("Lagrange", deg + 3))
+
 # "exact" solution
 u_exact = interpolate(Expression(ui_eval), V_exact)
+
 # best approximation from V
 u_BA = project(u_exact, V)
 

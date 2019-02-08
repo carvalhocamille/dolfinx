@@ -199,6 +199,7 @@ GenericDofMap::entity_dofs(const mesh::Mesh& mesh, std::size_t entity_dim) const
       entity_to_dofs[dofs_per_entity * entity.index() + local_dof] = global_dof;
     }
   }
+
   return entity_to_dofs;
 }
 //-----------------------------------------------------------------------------

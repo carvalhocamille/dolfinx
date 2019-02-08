@@ -8,6 +8,7 @@
 
 #include <dolfin/common/types.h>
 #include <dolfin/la/PETScVector.h>
+#include <memory>
 #include <vector>
 
 namespace dolfin
@@ -38,21 +39,27 @@ namespace fem
 {
 class Form;
 
-/// Initialise matrix. Matrix is not zeroed.
-la::PETScMatrix init_matrix(const Form& a);
+/// Compute IndexMaps for stacked index maps
+std::vector<std::vector<std::shared_ptr<const common::IndexMap>>>
+blocked_index_sets(const std::vector<std::vector<const fem::Form*>> a);
 
-/// Initialise nested (MatNest) matrix. Matrix is not zeroed.
-la::PETScMatrix init_nest_matrix(std::vector<std::vector<const fem::Form*>> a);
+/// Create matrix. Matrix is not zeroed.
+la::PETScMatrix create_matrix(const Form& a);
 
-/// Initialise nested (VecNest) vector. Vector is not zeroed.
-la::PETScVector init_nest(std::vector<const fem::Form*> L);
+/// Initialise monolithic matrix for an array for bilinear forms. Matrix
+/// is not zeroed.
+la::PETScMatrix
+create_matrix_block(std::vector<std::vector<const fem::Form*>> a);
 
-/// Initialise monolithic  matrix. Matrix is not zeroed.
-la::PETScMatrix init_monolithic_matrix(
-                     std::vector<std::vector<const fem::Form*>> a);
+/// Create nested (MatNest) matrix. Matrix is not zeroed.
+la::PETScMatrix
+create_matrix_nest(std::vector<std::vector<const fem::Form*>> a);
 
 /// Initialise monolithic vector. Vector is not zeroed.
-la::PETScVector init_monolithic(std::vector<const fem::Form*> L);
+la::PETScVector create_vector_block(std::vector<const fem::Form*> L);
+
+/// Initialise nested (VecNest) vector. Vector is not zeroed.
+la::PETScVector create_vector_nest(std::vector<const fem::Form*> L);
 
 /// Get new global index in 'spliced' indices
 std::size_t get_global_index(const std::vector<const common::IndexMap*> maps,

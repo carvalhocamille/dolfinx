@@ -19,7 +19,10 @@ FiniteElement::FiniteElement(std::shared_ptr<const ufc_finite_element> element)
   // Store dof coordinates on reference element
   assert(_ufc_element);
   _refX.resize(this->space_dimension(), this->topological_dimension());
-  _ufc_element->tabulate_reference_dof_coordinates(_refX.data());
+  int ret = _ufc_element->tabulate_reference_dof_coordinates(_refX.data());
+  if (ret == -1)
+    throw std::runtime_error("Generated code returned error "
+                             "in tabulate_reference_dof_coordinates");
 }
 //-----------------------------------------------------------------------------
 std::unique_ptr<FiniteElement>
@@ -86,9 +89,8 @@ FiniteElement::extract_sub_element(const FiniteElement& finite_element,
     return sub_element;
 
   // Otherwise, recursively extract the sub sub system
-  std::vector<std::size_t> sub_component;
-  for (std::size_t i = 1; i < component.size(); i++)
-    sub_component.push_back(component[i]);
+  const std::vector<std::size_t> sub_component(component.begin() + 1,
+                                               component.end());
 
   return extract_sub_element(*sub_element, sub_component);
 }

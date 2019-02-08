@@ -6,16 +6,13 @@
 
 #include "Variable.h"
 #include "UniqueIdGenerator.h"
-#include <dolfin/parameter/Parameters.h>
 #include <sstream>
 
 using namespace dolfin;
 using namespace dolfin::common;
 
 //-----------------------------------------------------------------------------
-Variable::Variable()
-    : _name("x"),
-      unique_id(common::UniqueIdGenerator::id())
+Variable::Variable() : _name("x"), unique_id(common::UniqueIdGenerator::id())
 
 {
   // Do nothing
@@ -28,8 +25,7 @@ Variable::Variable(const std::string name)
 }
 //-----------------------------------------------------------------------------
 Variable::Variable(const Variable& variable)
-    : _name(variable._name),
-      unique_id(common::UniqueIdGenerator::id())
+    : _name(variable._name), unique_id(common::UniqueIdGenerator::id())
 {
   // Do nothing
 }
@@ -37,16 +33,12 @@ Variable::Variable(const Variable& variable)
 const Variable& Variable::operator=(const Variable& variable)
 {
   // Assign everything but unique_id
-  parameters = variable.parameters;
   _name = variable._name;
 
   return *this;
 }
 //-----------------------------------------------------------------------------
-void Variable::rename(const std::string name)
-{
-  _name = name;
-}
+void Variable::rename(const std::string name) { _name = name; }
 //-----------------------------------------------------------------------------
 std::string Variable::name() const { return _name; }
 //-----------------------------------------------------------------------------

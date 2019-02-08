@@ -22,9 +22,10 @@
 #include "LogLevel.h"
 #include "Logger.h"
 #include <dolfin/common/MPI.h>
-#include <dolfin/common/constants.h>
 #include <dolfin/common/defines.h>
-#include <dolfin/parameter/GlobalParameters.h>
+
+#define DOLFIN_LINELENGTH 256
+#define DOLFIN_TERM_WIDTH 80
 
 using namespace dolfin;
 using namespace dolfin::log;
@@ -382,8 +383,7 @@ void Logger::write(int log_level, std::string msg) const
   const std::size_t rank = dolfin::MPI::rank(_mpi_comm);
 
   // Check if we want output on root process only
-  const bool std_out_all_processes
-      = parameter::parameters["std_out_all_processes"];
+  const bool std_out_all_processes = true;
   if (rank > 0 && !std_out_all_processes && log_level < WARNING)
     return;
 

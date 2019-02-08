@@ -1,8 +1,8 @@
 set(HEADERS
   assembler.h
   assemble_matrix_impl.h
+  assemble_scalar_impl.h
   assemble_vector_impl.h
-  AssemblerBase.h
   CellDofLayout.h
   CoordinateMapping.h
   DirichletBC.h
@@ -16,19 +16,15 @@ set(HEADERS
   FormCoefficients.h
   FormIntegrals.h
   GenericDofMap.h
-  LocalAssembler.h
-  NonlinearVariationalProblem.h
   PETScDMCollection.h
   SparsityPatternBuilder.h
-  SystemAssembler.h
-  UFC.h
   PARENT_SCOPE)
 
 set(SOURCES
   assembler.cpp
   assemble_matrix_impl.cpp
+  assemble_scalar_impl.cpp
   assemble_vector_impl.cpp
-  AssemblerBase.cpp
   CellDofLayout.cpp
   DirichletBC.cpp
   DiscreteOperators.cpp
@@ -40,10 +36,6 @@ set(SOURCES
   FormCoefficients.cpp
   FormIntegrals.cpp
   GenericDofMap.cpp
-  LocalAssembler.cpp
-  NonlinearVariationalProblem.cpp
   PETScDMCollection.cpp
   SparsityPatternBuilder.cpp
-  SystemAssembler.cpp
-  UFC.cpp
   PARENT_SCOPE)

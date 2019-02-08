@@ -7,20 +7,16 @@
 #pragma once
 
 #include <Eigen/Dense>
-#include <dolfin/common/Variable.h>
 #include <memory>
 #include <petscsys.h>
+#include <petscvec.h>
+#include <set>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace dolfin
 {
-
-namespace la
-{
-class PETScVector;
-}
 
 namespace common
 {
@@ -38,9 +34,12 @@ namespace fem
 
 /// This class provides a generic interface for dof maps
 
-class GenericDofMap : public common::Variable
+class GenericDofMap
 {
 public:
+  /// Destructor
+  virtual ~GenericDofMap() = default;
+
   /// True if dof map is a view into another map (is a sub-dofmap)
   virtual bool is_view() const = 0;
 
@@ -114,7 +113,7 @@ public:
   /// layout of vector must be consistent with dof map range. This
   /// function is typically used to construct the null space of a
   /// matrix operator
-  virtual void set(la::PETScVector& x, PetscScalar value) const = 0;
+  virtual void set(Vec x, PetscScalar value) const = 0;
 
   /// Index map (const access)
   virtual std::shared_ptr<const common::IndexMap> index_map() const = 0;

@@ -13,6 +13,7 @@ from petsc4py import PETSc
 import dolfin
 from dolfin import (MPI, FunctionSpace, TimingType, UnitSquareMesh, cpp,
                     list_timings)
+from dolfin_utils.test.skips import skip_if_complex
 
 c_signature = numba.types.void(
     numba.types.CPointer(numba.typeof(PETSc.ScalarType())),
@@ -56,23 +57,24 @@ def test_numba_assembly():
     V = FunctionSpace(mesh, ("Lagrange", 1))
 
     a = cpp.fem.Form([V._cpp_object, V._cpp_object])
-    a.set_cell_tabulate(0, tabulate_tensor_A.address)
+    a.set_tabulate_cell(0, tabulate_tensor_A.address)
 
     L = cpp.fem.Form([V._cpp_object])
-    L.set_cell_tabulate(0, tabulate_tensor_b.address)
+    L.set_tabulate_cell(0, tabulate_tensor_b.address)
 
-    A = dolfin.cpp.fem.assemble(a)
-    b = dolfin.cpp.fem.assemble(L)
+    A = dolfin.fem.assemble(a)
+    b = dolfin.fem.assemble(L)
 
-    Anorm = A.norm(cpp.la.Norm.frobenius)
-    bnorm = b.norm(cpp.la.Norm.l2)
+    Anorm = A.norm(PETSc.NormType.FROBENIUS)
+    bnorm = b.norm(PETSc.NormType.N2)
     assert (np.isclose(Anorm, 56.124860801609124))
     assert (np.isclose(bnorm, 0.0739710713711999))
 
     list_timings([TimingType.wall])
 
 
-def xtest_cffi_assembly():
+@skip_if_complex
+def test_cffi_assembly():
     mesh = UnitSquareMesh(MPI.comm_world, 13, 13)
     V = FunctionSpace(mesh, ("Lagrange", 1))
 
@@ -170,18 +172,17 @@ def xtest_cffi_assembly():
 
     a = cpp.fem.Form([V._cpp_object, V._cpp_object])
     ptrA = ffi.cast("intptr_t", ffi.addressof(lib, "tabulate_tensor_poissonA"))
-    a.set_cell_tabulate(0, ptrA)
+    a.set_tabulate_cell(0, ptrA)
 
     L = cpp.fem.Form([V._cpp_object])
     ptrL = ffi.cast("intptr_t", ffi.addressof(lib, "tabulate_tensor_poissonL"))
-    L.set_cell_tabulate(0, ptrL)
+    L.set_tabulate_cell(0, ptrL)
 
-    assembler = cpp.fem.Assembler([[a]], [L], [])
-    A = assembler.assemble_matrix(cpp.fem.Assembler.BlockType.monolithic)
-    b = assembler.assemble_vector(cpp.fem.Assembler.BlockType.monolithic)
+    A = dolfin.fem.assemble(a)
+    b = dolfin.fem.assemble(L)
 
-    Anorm = A.norm(cpp.la.Norm.frobenius)
-    bnorm = b.norm(cpp.la.Norm.l2)
+    Anorm = A.norm(PETSc.NormType.FROBENIUS)
+    bnorm = b.norm(PETSc.NormType.N2)
     assert (np.isclose(Anorm, 56.124860801609124))
     assert (np.isclose(bnorm, 0.0739710713711999))
 

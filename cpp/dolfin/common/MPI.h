@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <array>
 #include <cassert>
 #include <complex>
 #include <cstdint>
@@ -278,17 +279,17 @@ inline MPI_Datatype MPI::mpi_type<int>()
   return MPI_INT;
 }
 template <>
+inline MPI_Datatype MPI::mpi_type<unsigned int>()
+{
+  return MPI_UNSIGNED;
+}
+template <>
 inline MPI_Datatype MPI::mpi_type<long int>()
 {
   return MPI_LONG;
 }
 template <>
-inline MPI_Datatype MPI::mpi_type<std::uint32_t>()
-{
-  return MPI_UNSIGNED;
-}
-template <>
-inline MPI_Datatype MPI::mpi_type<unsigned long int>()
+inline MPI_Datatype MPI::mpi_type<unsigned long>()
 {
   return MPI_UNSIGNED_LONG;
 }
