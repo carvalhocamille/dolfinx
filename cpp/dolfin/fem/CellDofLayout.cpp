@@ -4,11 +4,9 @@
 //
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
-#include <iostream>
-
-#include <dolfin/log/log.h>
-
 #include "CellDofLayout.h"
+#include <iostream>
+#include <spdlog/spdlog.h>
 
 using namespace dolfin;
 using namespace dolfin::fem;
@@ -47,7 +45,7 @@ void CellDofLayout::permutation(std::vector<int>& perm,
     unsigned int n = (std::sqrt(1 + 8 * nfacet_dofs) - 1) / 2;
     if (n * (n + 1) != 2 * nfacet_dofs)
     {
-      log::warning("Tetrahedron facet dofs not triangular: "
+      spdlog::warn("Tetrahedron facet dofs not triangular: "
                    + std::to_string(nfacet_dofs) + " - not permuting...");
       return;
     }
