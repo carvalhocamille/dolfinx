@@ -12,10 +12,10 @@
 #include <boost/container/vector.hpp>
 #include <dolfin/common/MPI.h>
 #include <dolfin/common/Variable.h>
-#include <dolfin/log/log.h>
 #include <map>
 #include <memory>
 #include <unordered_set>
+#include <spdlog/spdlog.h>
 
 namespace dolfin
 {
@@ -227,8 +227,8 @@ MeshFunction<T>::MeshFunction(std::shared_ptr<const Mesh> mesh,
 
   // Generate connectivity if it does not exist
   _mesh->init(D, d);
-  const MeshConnectivity& connectivity = _mesh->topology().connectivity(D, d);
-  // assert(!connectivity.empty());
+  assert(_mesh->topology().connectivity(D, d));
+  const MeshConnectivity& connectivity = *_mesh->topology().connectivity(D, d);
 
   // Iterate over all values
   std::unordered_set<std::size_t> entities_values_set;
@@ -266,7 +266,7 @@ MeshFunction<T>::MeshFunction(std::shared_ptr<const Mesh> mesh,
   // Check that all values have been set, if not issue a debug message
   if (entities_values_set.size() != _values.size())
   {
-    dolfin_debug(
+    spdlog::debug(
         "Mesh value collection does not contain all values for all entities");
   }
 }
@@ -369,7 +369,7 @@ std::string MeshFunction<T>::str(bool verbose) const
   if (verbose)
   {
     s << str(false) << std::endl << std::endl;
-    log::warning(
+    spdlog::warn(
         "Verbose output of MeshFunctions must be implemented manually.");
   }
   else

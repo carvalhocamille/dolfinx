@@ -5,14 +5,15 @@
 // SPDX-License-Identifier:    LGPL-3.0-or-later
 
 #include <Eigen/Dense>
+#include <complex>
 #include <dolfin/common/IndexMap.h>
 #include <dolfin/common/MPI.h>
 #include <dolfin/common/SubSystemsManager.h>
+#include <dolfin/common/Table.h>
 #include <dolfin/common/Timer.h>
 #include <dolfin/common/Variable.h>
 #include <dolfin/common/defines.h>
 #include <dolfin/common/timing.h>
-#include <dolfin/log/Table.h>
 #include <memory>
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
@@ -69,6 +70,12 @@ void common(py::module& m)
            py::return_value_policy::reference_internal,
            "Return list of ghost indices");
 
+  // dolfin::Table
+  py::class_<dolfin::Table, std::shared_ptr<dolfin::Table>,
+             dolfin::common::Variable>(m, "Table")
+      .def(py::init<std::string>())
+      .def("str", &dolfin::Table::str);
+
   // dolfin::common::Timer
   py::class_<dolfin::common::Timer, std::shared_ptr<dolfin::common::Timer>>(
       m, "Timer", "Timer class")
@@ -104,10 +111,11 @@ void common(py::module& m)
                   (void (*)()) & dolfin::common::SubSystemsManager::init_petsc)
       .def_static("init_petsc",
                   [](std::vector<std::string> args) {
-    std::vector<char*> argv(args.size());
-    for (std::size_t i = 0; i < args.size(); ++i)
-      argv[i] = const_cast<char*>(args[i].data());
-    dolfin::common::SubSystemsManager::init_petsc(args.size(), argv.data());
+                    std::vector<char*> argv(args.size());
+                    for (std::size_t i = 0; i < args.size(); ++i)
+                      argv[i] = const_cast<char*>(args[i].data());
+                    dolfin::common::SubSystemsManager::init_petsc(args.size(),
+                                                                  argv.data());
                   })
       .def_static("finalize", &dolfin::common::SubSystemsManager::finalize)
       .def_static("responsible_mpi",
@@ -198,6 +206,10 @@ void mpi(py::module& m)
                   })
       .def_static("sum",
                   [](const MPICommWrapper comm, double value) {
+                    return dolfin::MPI::sum(comm.get(), value);
+                  })
+      .def_static("sum",
+                  [](const MPICommWrapper comm, std::complex<double> value) {
                     return dolfin::MPI::sum(comm.get(), value);
                   })
       // templated for dolfin::Table

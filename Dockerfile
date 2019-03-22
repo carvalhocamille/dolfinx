@@ -21,11 +21,12 @@
 #    docker run -p 8888:8888 -v "$(pwd)":/tmp quay.io/fenicsproject/dolfinx:notebook
 #
 
-ARG GMSH_VERSION=4.1.0
+ARG GMSH_VERSION=4.2.2
 ARG PYBIND11_VERSION=2.2.4
-ARG PETSC_VERSION=3.10.2
-ARG SLEPC_VERSION=3.10.1
-ARG PETSC4PY_VERSION=3.10.0
+ARG SPDLOG_VERSION=1.3.1
+ARG PETSC_VERSION=3.10.4
+ARG SLEPC_VERSION=3.10.2
+ARG PETSC4PY_VERSION=3.10.1
 ARG SLEPC4PY_VERSION=3.10.0
 ARG TINI_VERSION=v0.18.0
 
@@ -40,6 +41,7 @@ LABEL description="Base image for real and complex FEniCS test environments"
 
 ARG GMSH_VERSION
 ARG PYBIND11_VERSION
+ARG SPDLOG_VERSION
 
 WORKDIR /tmp
 
@@ -107,6 +109,16 @@ RUN wget -nc --quiet https://github.com/pybind/pybind11/archive/v${PYBIND11_VERS
     mkdir build && \
     cd build && \
     cmake -DPYBIND11_TEST=False ../ && \
+    make install && \
+    rm -rf /tmp/*
+
+# Install spdlog
+RUN wget -nc --quiet https://github.com/gabime/spdlog/archive/v${SPDLOG_VERSION}.tar.gz && \
+    tar -xf v${SPDLOG_VERSION}.tar.gz && \
+    cd spdlog-${SPDLOG_VERSION} && \
+    mkdir build && \
+    cd build && \
+    cmake -DSPDLOG_BUILD_BENCH=OFF ../ && \
     make install && \
     rm -rf /tmp/*
 

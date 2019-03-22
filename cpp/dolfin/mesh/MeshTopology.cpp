@@ -7,8 +7,8 @@
 #include "MeshTopology.h"
 #include "MeshConnectivity.h"
 #include <dolfin/common/utils.h>
-#include <dolfin/log/log.h>
 #include <numeric>
+#include <spdlog/spdlog.h>
 #include <sstream>
 
 using namespace dolfin;
@@ -19,7 +19,8 @@ MeshTopology::MeshTopology(std::size_t dim)
     : common::Variable("topology"), _num_entities(dim + 1, 0),
       _ghost_offset_index(dim + 1, 0), _global_num_entities(dim + 1, 0),
       _global_indices(dim + 1),
-      _connectivity(dim + 1, std::vector<MeshConnectivity>(dim + 1))
+      _connectivity(dim + 1,
+                    std::vector<std::shared_ptr<MeshConnectivity>>(dim + 1))
 
 {
   // Do nothing
@@ -60,7 +61,7 @@ void MeshTopology::clear(std::size_t d0, std::size_t d1)
 {
   assert(d0 < _connectivity.size());
   assert(d1 < _connectivity[d0].size());
-  _connectivity[d0][d1].clear();
+  _connectivity[d0][d1].reset();
 }
 //-----------------------------------------------------------------------------
 void MeshTopology::init(std::size_t dim, std::int32_t local_size,
@@ -102,16 +103,19 @@ MeshTopology::shared_entities(std::uint32_t dim) const
   auto e = _shared_entities.find(dim);
   if (e == _shared_entities.end())
   {
-    log::dolfin_error("MeshTopology.cpp", "get shared mesh entities",
-                      "Shared mesh entities have not been computed for dim %d",
-                      dim);
+    spdlog::error("MeshTopology.cpp", "get shared mesh entities",
+                  "Shared mesh entities have not been computed for dim %d",
+                  dim);
+    throw std::runtime_error("Not computed");
   }
   return e->second;
 }
 //-----------------------------------------------------------------------------
 size_t MeshTopology::hash() const
 {
-  return this->connectivity(dim(), 0).hash();
+  if (!this->connectivity(dim(), 0))
+    throw std::runtime_error("Connectivity has not been computed.");
+  return this->connectivity(dim(), 0)->hash();
 }
 //-----------------------------------------------------------------------------
 std::string MeshTopology::str(bool verbose) const
@@ -137,7 +141,7 @@ std::string MeshTopology::str(bool verbose) const
       s << "    " << d0;
       for (std::size_t d1 = 0; d1 <= _dim; d1++)
       {
-        if (!_connectivity[d0][d1].empty())
+        if (_connectivity[d0][d1])
           s << " x";
         else
           s << " -";
@@ -150,9 +154,9 @@ std::string MeshTopology::str(bool verbose) const
     {
       for (std::size_t d1 = 0; d1 <= _dim; d1++)
       {
-        if (_connectivity[d0][d1].empty())
+        if (!_connectivity[d0][d1])
           continue;
-        s << common::indent(_connectivity[d0][d1].str(true));
+        s << common::indent(_connectivity[d0][d1]->str(true));
         s << std::endl;
       }
     }
